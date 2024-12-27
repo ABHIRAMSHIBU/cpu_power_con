@@ -347,7 +347,8 @@ class CPUMonitorTUI:
         try:
             key = stdscr.getch()
             height = stdscr.getmaxyx()[0]
-            visible_lines = height - 3
+            visible_lines = height - 4  # Account for header, actions, and separator lines
+            max_scroll = max(0, self.cpu_manager.cpu_cores - visible_lines)  # Maximum scroll position
             
             if key == ord('q'):
                 self.running = False
@@ -356,13 +357,15 @@ class CPUMonitorTUI:
             elif key == curses.KEY_UP:
                 if self.current_row > 0:
                     self.current_row -= 1
+                    # Adjust scroll position to keep current row visible
                     if self.current_row < self.scroll_position:
                         self.scroll_position = self.current_row
             elif key == curses.KEY_DOWN:
                 if self.current_row < self.cpu_manager.cpu_cores - 1:
                     self.current_row += 1
+                    # Adjust scroll position to keep current row visible
                     if self.current_row >= self.scroll_position + visible_lines:
-                        self.scroll_position = self.current_row - visible_lines + 1
+                        self.scroll_position = min(self.current_row - visible_lines + 1, max_scroll)
             elif key == ord('j'):
                 stdscr.nodelay(0)
                 popup = NumberInput(stdscr, "Jump to Core", self.cpu_manager.cpu_cores - 1)
@@ -370,10 +373,11 @@ class CPUMonitorTUI:
                 stdscr.nodelay(1)
                 if selected is not None:
                     self.current_row = selected
+                    # Adjust scroll position to keep jumped-to core visible
                     if self.current_row < self.scroll_position:
                         self.scroll_position = self.current_row
                     elif self.current_row >= self.scroll_position + visible_lines:
-                        self.scroll_position = self.current_row - visible_lines + 1
+                        self.scroll_position = min(self.current_row - visible_lines + 1, max_scroll)
                 stdscr.clear()
             elif key == ord('a'):
                 if len(self.selected_cores) == self.cpu_manager.cpu_cores:
