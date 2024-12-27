@@ -248,6 +248,8 @@ class CPUMonitorTUI:
         self.refresh_rate = 1.0
         self.running = True
         self.color_mode = True  # True for colored, False for black & white
+        self.core_info = {}  # Cache for core information
+        self.last_freq_update = 0  # Track when we last updated frequencies
 
     def set_colors(self, stdscr):
         curses.start_color()
@@ -297,6 +299,15 @@ class CPUMonitorTUI:
     def start(self):
         curses.wrapper(self.main)
 
+    def update_core_info(self):
+        """Update cached core information"""
+        for i in range(self.cpu_manager.cpu_cores):
+            self.core_info[i] = self.cpu_manager.get_cpu_info(i)
+
+    def get_core_info(self, core_id):
+        """Get core information from cache"""
+        return self.core_info.get(core_id, self.cpu_manager.get_cpu_info(core_id))
+
     def main(self, stdscr):
         # Setup colors
         self.set_colors(stdscr)
@@ -313,24 +324,34 @@ class CPUMonitorTUI:
         # Set nodelay mode for non-blocking getch
         stdscr.nodelay(1)
         
-        last_update = 0
+        # Initialize core info
+        self.update_core_info()
+        self.last_freq_update = time.time()
+        needs_redraw = True
         
         while self.running:
             current_time = time.time()
             
-            # Handle input
-            self.handle_input(stdscr)
+            # Update frequencies at refresh interval
+            if current_time - self.last_freq_update >= self.refresh_rate:
+                self.update_core_info()
+                self.last_freq_update = current_time
+                needs_redraw = True
             
-            # Update display if refresh interval has passed
-            if current_time - last_update >= self.refresh_rate:
+            # Handle input and check if display needs update
+            if self.handle_input(stdscr):
+                needs_redraw = True
+            
+            # Update display if needed
+            if needs_redraw:
                 try:
                     self.update_display(stdscr)
-                    last_update = current_time
+                    needs_redraw = False
                 except curses.error:
                     pass
             
             # Small sleep to prevent high CPU usage
-            time.sleep(0.1)
+            time.sleep(0.01)  # Reduced sleep time for more responsive input
 
     def format_frequency(self, freq):
         """Format frequency in MHz or GHz based on value"""
@@ -344,11 +365,16 @@ class CPUMonitorTUI:
             return f"{freq:>6} MHz"
 
     def handle_input(self, stdscr):
+        """Handle keyboard input. Returns True if the display needs to be redrawn."""
         try:
             key = stdscr.getch()
+            if key == -1:  # No input
+                return False
+                
             height = stdscr.getmaxyx()[0]
             visible_lines = height - 4  # Account for header, actions, and separator lines
             max_scroll = max(0, self.cpu_manager.cpu_cores - visible_lines)  # Maximum scroll position
+            needs_redraw = True  # Most key handlers will need a redraw
             
             if key == ord('q'):
                 self.running = False
@@ -392,11 +418,14 @@ class CPUMonitorTUI:
                 if selected:
                     cores_to_update = self.selected_cores or {self.current_row}
                     self.cpu_manager.update_all_governors(selected, cores_to_update)
+                    # Force an immediate update of the cache for affected cores
+                    for core in cores_to_update:
+                        self.core_info[core] = self.cpu_manager.get_cpu_info(core)
                 stdscr.clear()
             elif key == ord('e') and self.amd_pstate_active:
                 # Get EPP info from current core or first selected core
                 core_id = next(iter(self.selected_cores)) if self.selected_cores else self.current_row
-                info = self.cpu_manager.get_cpu_info(core_id)
+                info = self.get_core_info(core_id)
                 available_preferences = info.get('energy_performance_available_preferences', '').split()
                 if available_preferences:
                     stdscr.nodelay(0)
@@ -406,6 +435,9 @@ class CPUMonitorTUI:
                     if selected:
                         cores_to_update = self.selected_cores or {self.current_row}
                         self.cpu_manager.update_all_epp(selected, list(cores_to_update))
+                        # Force an immediate update of the cache for affected cores
+                        for core in cores_to_update:
+                            self.core_info[core] = self.cpu_manager.get_cpu_info(core)
                     stdscr.clear()
             elif key == ord('r'):
                 stdscr.nodelay(0)
@@ -419,8 +451,12 @@ class CPUMonitorTUI:
                 self.color_mode = not self.color_mode
                 self.set_colors(stdscr)
                 stdscr.clear()
+            else:
+                needs_redraw = False  # If we didn't handle the key, no need to redraw
+            
+            return needs_redraw
         except curses.error:
-            pass
+            return False
 
     def safe_addstr(self, stdscr, y, x, text, attr=curses.A_NORMAL):
         """Safely add a string to the screen, truncating if necessary."""
@@ -503,7 +539,7 @@ class CPUMonitorTUI:
             # Display core information
             for i in range(start_idx, end_idx):
                 try:
-                    info = self.cpu_manager.get_cpu_info(i)
+                    info = self.get_core_info(i)
                     y_pos = i - start_idx + 3
                     
                     # Base attributes for the line
