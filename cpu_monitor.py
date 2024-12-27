@@ -5,7 +5,7 @@ import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit,
     QGridLayout, QComboBox, QPushButton, QMainWindow,
-    QDialog, QVBoxLayout, QTextEdit
+    QDialog, QVBoxLayout, QTextEdit, QCheckBox
 )
 from PyQt6.QtCore import Qt, QTimer
 
@@ -45,13 +45,15 @@ class CPUMonitor(QMainWindow):
                                 alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Add "All Cores" row
-        self.layout.addWidget(QLabel("All Cores:"), 1, 0, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.all_cores_checkbox = QCheckBox("All Cores")
+        self.all_cores_checkbox.stateChanged.connect(self.toggle_all_cores)
+        self.layout.addWidget(self.all_cores_checkbox, 1, 0, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        all_gov_combo = QComboBox()
-        all_gov_combo.addItems(self.available_governors)
-        all_gov_combo.currentIndexChanged.connect(lambda index: self.update_all_governors(all_gov_combo.itemText(index)))
-        self.layout.addWidget(all_gov_combo, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft)
-        self.all_governor_combobox = all_gov_combo
+        self.all_gov_combo = QComboBox()
+        self.all_gov_combo.addItems(self.available_governors)
+        self.all_gov_combo.currentIndexChanged.connect(lambda index: self.update_all_governors(self.all_gov_combo.itemText(index)))
+        self.layout.addWidget(self.all_gov_combo, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.all_governor_combobox = self.all_gov_combo
 
         if self.amd_pstate_active:
             all_epp_combo = QComboBox()
@@ -61,8 +63,11 @@ class CPUMonitor(QMainWindow):
             self.layout.addWidget(all_epp_combo, 1, 3, alignment=Qt.AlignmentFlag.AlignLeft)
             self.all_epp_combobox = all_epp_combo
 
+        self.core_checkboxes = []
         for i in range(self.cpu_cores):
-            self.layout.addWidget(QLabel(f"Core {i}:"), i + 2, 0, alignment=Qt.AlignmentFlag.AlignLeft)
+            core_checkbox = QCheckBox(f"Core {i}")
+            self.layout.addWidget(core_checkbox, i + 2, 0, alignment=Qt.AlignmentFlag.AlignLeft)
+            self.core_checkboxes.append(core_checkbox)
 
             freq_label = QLabel("Frequency: N/A")
             self.layout.addWidget(freq_label, i + 2, 1, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -98,7 +103,11 @@ class CPUMonitor(QMainWindow):
 
         self.update_cpu_info()
 
-    # Add these methods to the CPUMonitor class
+    def toggle_all_cores(self, state):
+        checked = state == Qt.CheckState.Checked
+        for checkbox in self.core_checkboxes:
+            checkbox.setChecked(checked)
+
     def is_amd_cpu(self):
         try:
             with open("/proc/cpuinfo") as f:
@@ -253,11 +262,12 @@ class CPUMonitor(QMainWindow):
     def update_all_epp(self, new_epp):
         script_path = os.path.abspath(__file__)
         for i in range(self.cpu_cores):
-            subprocess.run(['sudo', sys.executable, script_path,
-                            "--core", str(i),
-                            "--epp", new_epp],
-                            check=True)
-        print(f"EPP set to {new_epp} for all cores")
+            if self.core_checkboxes[i].isChecked():
+                subprocess.run(['sudo', sys.executable, script_path,
+                                "--core", str(i),
+                                "--epp", new_epp],
+                                check=True)
+                print(f"EPP set to {new_epp} for core {i}")
         self.update_cpu_info()
 
     def update_governor(self, core_id):
@@ -301,29 +311,30 @@ class CPUMonitor(QMainWindow):
     def update_all_governors(self, new_governor):
         script_path = os.path.abspath(__file__)
         for i in range(self.cpu_cores):
-            if new_governor == "userspace":
-                try:
-                    with open(f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_max_freq") as f:
-                        max_freq = f.read().strip()
+            if self.core_checkboxes[i].isChecked():
+                if new_governor == "userspace":
+                    try:
+                        with open(f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_max_freq") as f:
+                            max_freq = f.read().strip()
 
-                    script_path = os.path.abspath(__file__)
+                        script_path = os.path.abspath(__file__)
+                        subprocess.run(['sudo', sys.executable, script_path, 
+                                      "--core", str(i),
+                                      '--governor', "userspace", "--max-freq", max_freq],
+                                      check=True)
+                    except FileNotFoundError:
+                        print(f"Error: Could not find scaling_max_freq for core {i}")
+                        return
+                    except subprocess.CalledProcessError:
+                        print(f"Error: Failed to set governor for core {i}")
+                        return
+                else:
                     subprocess.run(['sudo', sys.executable, script_path, 
-                                  "--core", str(i),
-                                  '--governor', "userspace", "--max-freq", max_freq],
-                                  check=True)
-                except FileNotFoundError:
-                    print(f"Error: Could not find scaling_max_freq for core {i}")
-                    return
-                except subprocess.CalledProcessError:
-                    print(f"Error: Failed to set governor for core {i}")
-                    return
-            else:
-                subprocess.run(['sudo', sys.executable, script_path, 
-                                "--core", str(i),
-                                '--governor', new_governor],
-                                check=True)
-            print(f"Governor for core {i} set to {new_governor}")
-            self.governor_labels[i].setText(f"Governor: {new_governor}")
+                                    "--core", str(i),
+                                    '--governor', new_governor],
+                                    check=True)
+                print(f"Governor for core {i} set to {new_governor}")
+                self.governor_labels[i].setText(f"Governor: {new_governor}")
         self.update_cpu_info()
 
 def set_governor_and_max_freq(core_id, max_freq=None, governor=None, epp=None):
