@@ -4,6 +4,7 @@ import os
 import argparse
 from src.core.privilege_handler import PrivilegeHandler
 from src.ui.monitor import CPUMonitor
+from src.ui.tui import CPUMonitorTUI
 from src.utils.signal_handler import SignalHandler
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
@@ -25,6 +26,7 @@ def main():
     parser.add_argument("--governor", type=str, help="Governor to set")
     parser.add_argument("--max-freq", type=str, help="Max frequency to set")
     parser.add_argument("--epp", type=str, help="Energy Performance Preference to set")
+    parser.add_argument("--tui", action="store_true", help="Use terminal user interface instead of GUI")
     args = parser.parse_args()
 
     if args.core is not None:
@@ -35,22 +37,30 @@ def main():
             epp=args.epp
         )
     else:
-        app = QApplication(sys.argv)
-        
         if not check_root_access():
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Icon.Warning)
-            msg.setText("Root privileges required")
-            msg.setInformativeText("CPU Monitor requires root privileges to read and modify CPU settings.\nPlease run the application with sudo.")
-            msg.setWindowTitle("Permission Error")
-            msg.exec()
-            return 1
-            
-        monitor = CPUMonitor()
-        # Setup signal handler with cleanup callback
-        signal_handler = SignalHandler(app, cleanup_callback=monitor.cleanup)
-        monitor.show()
-        sys.exit(app.exec())
+            if args.tui:
+                print("Error: Root privileges required. Please run with sudo.")
+                return 1
+            else:
+                app = QApplication(sys.argv)
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Icon.Warning)
+                msg.setText("Root privileges required")
+                msg.setInformativeText("CPU Monitor requires root privileges to read and modify CPU settings.\nPlease run the application with sudo.")
+                msg.setWindowTitle("Permission Error")
+                msg.exec()
+                return 1
+
+        if args.tui:
+            monitor = CPUMonitorTUI()
+            monitor.start()
+        else:
+            app = QApplication(sys.argv)
+            monitor = CPUMonitor()
+            # Setup signal handler with cleanup callback
+            signal_handler = SignalHandler(app, cleanup_callback=monitor.cleanup)
+            monitor.show()
+            sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
