@@ -49,7 +49,7 @@ class CPUMonitor(QMainWindow):
 
         all_gov_combo = QComboBox()
         all_gov_combo.addItems(self.available_governors)
-        all_gov_combo.currentIndexChanged.connect(self.create_update_all_governors_handler)
+        all_gov_combo.currentIndexChanged.connect(lambda index: self.update_all_governors(all_gov_combo.itemText(index)))
         self.layout.addWidget(all_gov_combo, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft)
         self.all_governor_combobox = all_gov_combo
 
@@ -57,7 +57,7 @@ class CPUMonitor(QMainWindow):
             all_epp_combo = QComboBox()
             available_preferences = self.get_amd_pstate_parameters().get("energy_performance_available_preferences", "").split()
             all_epp_combo.addItems(available_preferences)
-            all_epp_combo.currentIndexChanged.connect(self.create_update_all_epp_handler)
+            all_epp_combo.currentIndexChanged.connect(lambda index: self.update_all_epp(all_epp_combo.itemText(index)))
             self.layout.addWidget(all_epp_combo, 1, 3, alignment=Qt.AlignmentFlag.AlignLeft)
             self.all_epp_combobox = all_epp_combo
 
@@ -232,14 +232,10 @@ class CPUMonitor(QMainWindow):
         return handler
 
     def create_update_all_governors_handler(self):
-        def handler():
-            self.update_all_governors()
-        return handler
+        return lambda index: self.update_all_governors(self.all_governor_combobox.itemText(index))
 
     def create_update_all_epp_handler(self):
-        def handler():
-            self.update_all_epp()
-        return handler
+        return lambda index: self.update_all_epp(self.all_epp_combobox.itemText(index))
 
     def update_epp(self, core_id):
         if core_id < len(self.epp_comboboxes):
@@ -254,15 +250,14 @@ class CPUMonitor(QMainWindow):
             print(f"No EPP combobox found for core {core_id}")
         self.update_cpu_info()
 
-    def update_all_epp(self):
-        selected_epp = self.all_epp_combobox.currentText()
+    def update_all_epp(self, new_epp):
         script_path = os.path.abspath(__file__)
         for i in range(self.cpu_cores):
             subprocess.run(['sudo', sys.executable, script_path,
                             "--core", str(i),
-                            "--epp", selected_epp],
+                            "--epp", new_epp],
                             check=True)
-        print(f"EPP set to {selected_epp} for all cores")
+        print(f"EPP set to {new_epp} for all cores")
         self.update_cpu_info()
 
     def update_governor(self, core_id):
@@ -303,8 +298,7 @@ class CPUMonitor(QMainWindow):
                 self.epp_comboboxes[core_id].addItems(available_preferences)
                 self.epp_comboboxes[core_id].setCurrentText(current_epp)
 
-    def update_all_governors(self):
-        new_governor = self.all_governor_combobox.currentText()
+    def update_all_governors(self, new_governor):
         script_path = os.path.abspath(__file__)
         for i in range(self.cpu_cores):
             if new_governor == "userspace":
