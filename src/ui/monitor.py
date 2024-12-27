@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QMainWindow, QWidget, QGridLayout
-from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QMainWindow, QWidget, QGridLayout, QScrollArea, QSizePolicy
+from PyQt6.QtCore import QTimer, Qt
 
 from ..core.cpu_manager import CPUManager
 from .components import CoreControls, GlobalControls, AMDParamsDialog
@@ -9,14 +9,33 @@ class CPUMonitor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CPU Monitor")
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.layout = QGridLayout(self.central_widget)
-
+        
+        # Initialize manager and components first
         self.cpu_manager = CPUManager()
+        
+        # Create a scroll area
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setCentralWidget(self.scroll)
+        
+        # Create the main widget that will be scrollable
+        self.central_widget = QWidget()
+        self.central_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.MinimumExpanding)
+        self.scroll.setWidget(self.central_widget)
+        self.layout = QGridLayout(self.central_widget)
+        
+        # Set minimum height
+        self.setMinimumHeight(400)
+        
+        # Setup the actual UI components
         self.setup_ui()
         self.setup_workers()
         self.setup_timer()
+        
+        # Calculate initial width after UI setup
+        self.update_window_width()
         
         # Do an initial update
         self.update_cpu_info()
@@ -171,6 +190,8 @@ class CPUMonitor(QMainWindow):
                 self.global_controls.update_epp_preferences(
                     params.get('energy_performance_available_preferences', '').split()
                 )
+                # Update width after preferences change
+                self.update_window_width()
 
     def update_epp(self, core_id):
         controls = self.core_controls[core_id]
@@ -180,6 +201,8 @@ class CPUMonitor(QMainWindow):
                 # Force an immediate update of AMD P-state params
                 params = self.cpu_manager.get_amd_pstate_params(core_id)
                 controls.update_amd_params(params)
+                # Update width after params change
+                self.update_window_width()
 
     def update_all_governors(self, new_governor):
         selected_cores = [
@@ -196,3 +219,14 @@ class CPUMonitor(QMainWindow):
             if controls.checkbox.isChecked()
         ]
         self.cpu_manager.update_all_epp(new_epp, selected_cores) 
+
+    def update_window_width(self):
+        """Recalculate and update the window width based on components"""
+        # Let the layout process all pending changes
+        self.central_widget.adjustSize()
+        # Get the width needed for all components
+        required_width = self.central_widget.sizeHint().width()
+        # Add padding for scrollbar and margins
+        required_width += self.scroll.verticalScrollBar().sizeHint().width() + 30
+        # Update the window width
+        self.setFixedWidth(required_width) 
