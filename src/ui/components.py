@@ -50,19 +50,22 @@ class CoreControls:
             self.epp_label = None
             self.epp_combo = None
 
-    def update_info(self, info):
-        freq = info.get('frequency', 'N/A')
-        self.freq_label.setText(f"Frequency: {int(freq) // 1000 if freq.isdigit() else 'N/A'} MHz")
-        
-        governor = info.get('governor', 'N/A')
+    def update_frequency(self, freq):
+        try:
+            self.freq_label.setText(f"Frequency: {int(freq) // 1000 if freq.isdigit() else 'N/A'} MHz")
+        except (ValueError, AttributeError):
+            self.freq_label.setText("Frequency: N/A")
+
+    def update_governor(self, governor):
         self.gov_label.setText(f"Governor: {governor}")
         if governor in [self.gov_combo.itemText(i) for i in range(self.gov_combo.count())]:
             self.gov_combo.setCurrentText(governor)
 
-        if self.epp_combo and 'energy_performance_preference' in info:
-            epp = info.get('energy_performance_preference', 'N/A')
+    def update_amd_params(self, params):
+        if self.epp_combo and 'energy_performance_preference' in params:
+            epp = params.get('energy_performance_preference', 'N/A')
             self.epp_label.setText(f"EPP: {epp}")
-            available_preferences = info.get('energy_performance_available_preferences', '').split()
+            available_preferences = params.get('energy_performance_available_preferences', '').split()
             if available_preferences:
                 current_items = [self.epp_combo.itemText(i) for i in range(self.epp_combo.count())]
                 if available_preferences != current_items:

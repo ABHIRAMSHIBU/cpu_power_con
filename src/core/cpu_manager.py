@@ -8,6 +8,17 @@ class CPUManager:
         self.amd_pstate_active = FileHandler.is_amd_pstate()
         self.available_governors = FileHandler.get_available_governors()
 
+    def get_cpu_frequency(self, core_id):
+        return FileHandler.get_cpu_frequency(core_id)
+
+    def get_cpu_governor(self, core_id):
+        return FileHandler.get_cpu_governor(core_id)
+
+    def get_amd_pstate_params(self, core_id):
+        if not self.amd_pstate_active:
+            return {}
+        return FileHandler.get_amd_pstate_params(core_id)
+
     def update_governor(self, core_id, new_governor):
         if new_governor == "userspace":
             max_freq = FileHandler.get_max_freq(core_id)
@@ -18,6 +29,8 @@ class CPUManager:
         return False
 
     def update_epp(self, core_id, new_epp):
+        if not self.amd_pstate_active:
+            return False
         return PrivilegeHandler.set_governor_and_freq(core_id, epp=new_epp)
 
     def get_cpu_info(self, core_id):
@@ -39,6 +52,8 @@ class CPUManager:
         return success
 
     def update_all_epp(self, new_epp, selected_cores):
+        if not self.amd_pstate_active:
+            return False
         success = True
         for core_id in selected_cores:
             if not self.update_epp(core_id, new_epp):
