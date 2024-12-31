@@ -6,7 +6,9 @@ from src.core.privilege_handler import PrivilegeHandler
 from src.ui.monitor import CPUMonitor
 from src.ui.tui import CPUMonitorTUI
 from src.utils.signal_handler import SignalHandler
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox, QMainWindow, QWidget, QGridLayout, QTableWidget, QTableWidgetItem
+from PyQt6.QtCore import Qt
+import psutil
 
 def check_root_access():
     test_file = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
@@ -19,6 +21,40 @@ def check_root_access():
     except FileNotFoundError:
         # If the file doesn't exist, we can't determine if we have root access
         return True
+
+class ProcessWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Running Processes")
+        self.setGeometry(100, 100, 800, 600)
+
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QGridLayout(central_widget)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["PID", "Process Name", "Core"])
+        layout.addWidget(self.table, 0, 0)
+
+        self.load_processes()
+
+    def load_processes(self):
+        processes = []
+        for process in psutil.process_iter(['pid', 'name', 'cpu_affinity']):
+            try:
+                core_ids = process.info['cpu_affinity']
+                for core_id in core_ids:
+                    processes.append((process.info['pid'], process.info['name'], core_id))
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+
+        self.table.setRowCount(len(processes))
+        for row, (pid, name, core) in enumerate(processes):
+            self.table.setItem(row, 0, QTableWidgetItem(str(pid)))
+            self.table.setItem(row, 1, QTableWidgetItem(name))
+            self.table.setItem(row, 2, QTableWidgetItem(str(core)))
+        self.table.resizeColumnsToContents()
 
 def main():
     parser = argparse.ArgumentParser(description="CPU Monitor")

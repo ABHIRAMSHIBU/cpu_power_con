@@ -110,6 +110,8 @@ class CPUMonitor(QMainWindow):
         if self.cpu_manager.amd_pstate_active:
             self.global_controls.amd_params_button.clicked.connect(self.show_amd_params)
 
+        self.global_controls.process_button.clicked.connect(self.show_process_window)
+
         self.global_controls.all_cores_checkbox.stateChanged.connect(self.toggle_all_cores)
         self.global_controls.all_gov_combo.currentIndexChanged.connect(
             lambda: self.update_all_governors(self.global_controls.all_gov_combo.currentText())
@@ -172,6 +174,11 @@ class CPUMonitor(QMainWindow):
         self.workers['amd_pstate'][0].finished.disconnect(self._show_amd_params_dialog)
         dialog.exec()
 
+    def show_process_window(self):
+        from cpu_monitor import ProcessWindow
+        self.process_window = ProcessWindow()
+        self.process_window.show()
+
     def toggle_all_cores(self, state):
         for controls in self.core_controls:
             controls.checkbox.setChecked(state)
@@ -229,4 +236,4 @@ class CPUMonitor(QMainWindow):
         # Add padding for scrollbar and margins
         required_width += self.scroll.verticalScrollBar().sizeHint().width() + 30
         # Update the window width
-        self.setFixedWidth(required_width) 
+        self.setFixedWidth(required_width)

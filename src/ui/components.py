@@ -89,6 +89,9 @@ class GlobalControls:
             self.amd_params_button = QPushButton("Show AMD P-State Parameters")
             layout.addWidget(self.amd_params_button, 0, 3, alignment=Qt.AlignmentFlag.AlignLeft)
 
+        self.process_button = QPushButton("Show Processes")
+        layout.addWidget(self.process_button, 0, 4, alignment=Qt.AlignmentFlag.AlignLeft)
+
         self.all_cores_checkbox = QCheckBox("All Cores")
         layout.addWidget(self.all_cores_checkbox, 1, 0, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -108,4 +111,4 @@ class GlobalControls:
             current_items = [self.all_epp_combo.itemText(i) for i in range(self.all_epp_combo.count())]
             if available_preferences != current_items:
                 self.all_epp_combo.clear()
-                self.all_epp_combo.addItems(available_preferences) 
+                self.all_epp_combo.addItems(available_preferences)

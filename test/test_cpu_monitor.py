@@ -180,5 +180,26 @@ def test_refresh_rate_update(monitor):
     assert monitor.timer.interval() == 1000
     assert monitor.global_controls.refresh_entry.text() == "1.0"
 
+def test_process_window_opens(monitor):
+    """Test if the process window opens and displays correctly"""
+    QTest.qWait(10)  # Wait for UI updates
+    
+    # Get the process button from global controls
+    process_button = monitor.global_controls.process_button
+    assert process_button is not None, "Process button not found"
+    
+    # Click the button
+    QTest.mouseClick(process_button, Qt.MouseButton.LeftButton)
+    QTest.qWait(100)  # Wait for window to open
+    
+    # Check if the process window is open
+    assert hasattr(monitor, 'process_window')
+    assert monitor.process_window.isVisible()
+    assert "Running Processes" in monitor.process_window.windowTitle()
+    
+    # Check if the table has data
+    table = monitor.process_window.table
+    assert table.rowCount() > 0
+
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"]) 
+    pytest.main([__file__, "-v"])
